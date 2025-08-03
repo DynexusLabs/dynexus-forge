@@ -513,6 +513,11 @@ module dynexus_forge::token_factory {
     // Test functions
     //
     #[test_only]
+    public fun initalize_token_factory_with_out_genesis(admin: &signer) {
+        init_module(admin)
+    }
+
+    #[test_only]
     public fun initalize_token_factory(admin: &signer) {
         genesis::setup();
         init_module(admin)

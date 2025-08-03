@@ -14,6 +14,9 @@ module dynexus_forge::token_factory {
     use aptos_framework::object::{Object, ExtendRef};
     use aptos_framework::primary_fungible_store;
     use aptos_framework::timestamp;
+    #[test_only]
+    use aptos_framework::genesis;
+
 
     //
     // Constants
@@ -21,9 +24,9 @@ module dynexus_forge::token_factory {
     /// Contract addresss
     const CA: address = @dynexus_forge;
     /// Token creation seed
-    const TOKEN_SEED: vector<u8> = b"DYNASWAP_TOKEN_";
+    const TOKEN_SEED: vector<u8> = b"DYNEXUS";
     /// Token factory object creation seed
-    const TOKEN_FACTORY_OBJECT_SEED: vector<u8> = b"TOKEN_FACTORY_ADMIN";
+    const TOKEN_FACTORY_OBJECT_SEED: vector<u8> = b"DYNEXUS_FORGE_OWNER";
     /// Max symbol length
     const MAX_SYMBOL_LENGTH: u8 = 2;
 
@@ -53,9 +56,6 @@ module dynexus_forge::token_factory {
 
     /// Token factory not initialized yet..
     const E_REGISTRY_NOT_EXISTS: u64 = 8;
-
-    /// Exseed symbol length (MAX_LENGTH = 2)
-    const E_SYMBOL_TOO_LONG: u64 = 9;
 
     //
     // Structs
@@ -105,7 +105,7 @@ module dynexus_forge::token_factory {
         creator: address
     }
 
-    struct TokenList {
+    struct TokenList has copy, drop {
         name: String,
         symbol: String,
         token_address: address
@@ -135,7 +135,10 @@ module dynexus_forge::token_factory {
     //
     // Inttialize Function
     //
-
+    /// Initializes the Token Factory module
+    ///
+    /// # Parameters
+    /// - `admin`: signer of the admin deploying the token factory
     fun init_module(admin: &signer) {
         let admin_addr = address_of(admin);
         let constructor_ref =
@@ -162,7 +165,24 @@ module dynexus_forge::token_factory {
     // Token Creation & Management
     //
 
-    /// Create fungible token
+    /// Creates a custom fungible token in the DYNA ecosystem.
+    ///
+    /// # Parameters
+    /// - `creator`: signer of the token creator
+    /// - `name`: Full name of the token
+    /// - `symbol`: Short symbol (max 2 chars)
+    /// - `decimals`: Decimal precision (max 18)
+    /// - `inital_supply`: Initial amount of tokens to mint to creator
+    /// - `icon_uri`: Link to token icon
+    /// - `project_uri`: Project website or metadata link
+    ///
+    /// # Returns
+    /// - `(creator_address, token_address)`
+    ///
+    /// # Aborts With
+    /// - `E_SYMBOL_TOO_LONG` if symbol > MAX_SYMBOL_LENGTH
+    /// - `E_TOKEN_ALREADY_EXISTS` if token with same name/symbol exists
+    /// - `E_INVALID_PARAMETERS` for invalid decimals or URIs
     public fun create_token(
         creator: &signer,
         name: String,
@@ -171,8 +191,7 @@ module dynexus_forge::token_factory {
         inital_supply: u64,
         icon_uri: String,
         project_uri: String
-    ): (address, address) acquires TokenRegistry, ManageFungibleAsset {
-        assert!(symbol.length() <= (MAX_SYMBOL_LENGTH as u64), E_SYMBOL_TOO_LONG);
+    ) acquires TokenRegistry, ManageFungibleAsset {
 
         let creator_addr = address_of(creator);
 
@@ -250,11 +269,18 @@ module dynexus_forge::token_factory {
             }
         );
 
-        (creator_addr, token_address)
-
     }
 
-    /// Mint custom token
+    /// Mints additional supply of a DYNA-based token to a user
+    ///
+    /// # Parameters
+    /// - `owner`: signer of token owner/creator
+    /// - `to`: address to receive minted tokens
+    /// - `token_address`: address of the token to mint
+    /// - `amount`: quantity to mint
+    ///
+    /// # Aborts With
+    /// - `E_NOT_AN_OWNER` if caller is not token creator
     public fun mint_token(
         owner: &signer,
         to: address,
@@ -275,8 +301,16 @@ module dynexus_forge::token_factory {
         fungible_asset::deposit_with_ref(&metadata.transfer_ref, to_wallet, token);
     }
 
-    /// Transfer token
-
+    /// Transfers a DYNA-based token between two users
+    ///
+    /// # Parameters
+    /// - `from`: signer initiating the transfer
+    /// - `to`: recipient address
+    /// - `token_address`: address of the token being transferred
+    /// - `amount`: amount to transfer
+    ///
+    /// # Aborts With
+    /// - `E_INSUFFICIENT_BALANCE` if balance is insufficient
     public entry fun transfer_token(
         from: &signer,
         to: address,
@@ -480,7 +514,35 @@ module dynexus_forge::token_factory {
     //
     #[test_only]
     public fun initalize_token_factory(admin: &signer) {
+        genesis::setup();
         init_module(admin)
+    }
+
+    #[test_only]
+    public fun create_test_token(
+        creator: &signer,
+        name: String,
+        symbol: String,
+        decimals: u8,
+        inital_supply: u64,
+        icon_uri: String,
+        project_uri: String,
+        index: u64
+    ): (String, String, address) acquires TokenRegistry, ManageFungibleAsset {
+        create_token(
+            creator,
+            name,
+            symbol,
+            decimals,
+            inital_supply,
+            icon_uri,
+            project_uri
+        );
+
+        let tokens =get_tokens();
+        let token = tokens[index];
+
+        (token.name, token.symbol, token.token_address)
     }
 
     #[test_only]

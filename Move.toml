@@ -10,3 +10,6 @@ dynexus_forge = "0xe95613a20a4f2cd2e626e76a51bceab0fe564aaaadb844a2a942b236f7105
 git = "https://github.com/aptos-labs/aptos-framework.git"
 rev = "mainnet"
 subdir = "aptos-framework"
+
+[dependencies]
+AptosMoveUtils = { git = "https://github.com/mrathod05/aptos-move-utils.git", rev = "mainnet" }

@@ -1,21 +1,13 @@
 module dynexus_forge::token_factory {
 
-    use std::error;
     use std::option;
     use std::signer::address_of;
-    use std::string::String;
-    use std::vector;
-    use aptos_std::table;
-    use aptos_std::table::Table;
+    use std::string::{String};
     use aptos_framework::event;
-    use aptos_framework::fungible_asset;
-    use aptos_framework::fungible_asset::{Metadata, MintRef, TransferRef, BurnRef};
-    use aptos_framework::object;
-    use aptos_framework::object::{Object, ExtendRef};
+    use aptos_framework::fungible_asset::{Self, MintRef, TransferRef, BurnRef, Metadata};
+    use aptos_framework::object::{Self, ExtendRef, address_to_object};
     use aptos_framework::primary_fungible_store;
     use aptos_framework::timestamp;
-    #[test_only]
-    use aptos_framework::genesis;
 
 
     //
@@ -27,17 +19,16 @@ module dynexus_forge::token_factory {
     const TOKEN_SEED: vector<u8> = b"DYNEXUS";
     /// Token factory object creation seed
     const TOKEN_FACTORY_OBJECT_SEED: vector<u8> = b"DYNEXUS_FORGE_OWNER";
-    /// Max symbol length
-    const MAX_SYMBOL_LENGTH: u8 = 2;
+    /// Max token decimal
+    const MAX_DECIMAL: u8 = 8;
+    /// Max token uri length
+    const MAX_URI_LENGTH: u32 = 512;
 
     //
     // Errors
     //
     /// Token already exists in the registry.
     const E_TOKEN_ALREADY_EXISTS: u64 = 1;
-
-    /// Provided parameters are invalid.
-    const E_INVALID_PARAMETERS: u64 = 2;
 
     /// User has insufficient balance for the operation.
     const E_INSUFFICIENT_BALANCE: u64 = 3;
@@ -57,41 +48,35 @@ module dynexus_forge::token_factory {
     /// Token factory not initialized yet..
     const E_REGISTRY_NOT_EXISTS: u64 = 8;
 
+    /// Token deciaml should less then 8
+    const E_INVALID_TOKEN_DECIMAL: u64 = 9;
+
+    /// Token uri length should less then 512
+    const E_INVALID_URI_LENGTH: u64 = 10;
+
+    /// Token address are same
+    const E_INVALID_TOKEN_ADDRESS: u64 = 11;
+
+    /// Invalid Dynexus fees
+    const E_INVALID_FEE: u64 = 12;
+
+    /// User has insufficient balance of dynexus.
+    const E_INSUFFICIENT_DYANEXUS_BALANCE: u64 = 12;
+
+
     //
     // Structs
     //
-
-    struct TokenInfo has store, copy, drop {
-        name: String,
-        symbol: String,
-        decimals: u8,
-        token_address: address,
-        creator: address,
-        icon_uri: String,
-        project_uri: String,
-        total_supply: u64,
-        created_at: u64
-    }
-
-    struct UserTokens has key, store {
-        created_tokens: vector<address>
-    }
-
     struct TokenRegistry has key {
-        // Global token registry
-        tokens: Table<address, TokenInfo>,
-        total_list: vector<address>,
-        tokens_seeds: Table<vector<u8>, address>,
-
-        // User management
-        user_tokens: Table<address, UserTokens>,
-
-        // Statistics
-        total_users: u64,
+        //
+        dynexus_token: address,
 
         // Admin controls
         admin: address,
         plateform_fee_rate: u64,
+
+        // Statistics
+        total_users: u64,
 
         // extending object signer
         extend_ref: ExtendRef
@@ -119,7 +104,6 @@ module dynexus_forge::token_factory {
     struct TokenCreated has drop, store {
         creator: address,
         token_address: address,
-        inital_supply: u64,
         timestamp: u64
     }
 
@@ -129,7 +113,6 @@ module dynexus_forge::token_factory {
         to: address,
         token_address: address,
         amount: u64,
-        timestamp: u64
     }
 
     //
@@ -150,13 +133,10 @@ module dynexus_forge::token_factory {
             obj_signer,
             TokenRegistry {
                 admin: admin_addr,
-                tokens: table::new(),
-                tokens_seeds: table::new(),
-                user_tokens: table::new(),
-                total_list: vector::empty<address>(),
                 total_users: 0,
-                plateform_fee_rate: 100, // 1% default,
-                extend_ref
+                plateform_fee_rate: 5, // DYNEXUS token
+                extend_ref,
+                dynexus_token: @0x0
             }
         );
     }
@@ -164,6 +144,26 @@ module dynexus_forge::token_factory {
     //
     // Token Creation & Management
     //
+
+    public entry fun set_dynexus_token(owner: &signer, new_address: address) acquires TokenRegistry {
+        let owner_addr = address_of(owner);
+        let owner_obj_addr = object::create_object_address(&owner_addr, TOKEN_FACTORY_OBJECT_SEED);
+        let registry = borrow_global_mut<TokenRegistry>(owner_obj_addr);
+
+        assert!(registry.admin == owner_addr , E_NOT_AN_OWNER);
+        assert!(registry.dynexus_token != new_address , E_INVALID_TOKEN_ADDRESS);
+        registry.dynexus_token = new_address;
+    }
+
+    public entry fun set_dynexus_plateform_fee_rate(owner: &signer, new_fee: u64) acquires TokenRegistry {
+        let owner_addr = address_of(owner);
+        let owner_obj_addr = object::create_object_address(&owner_addr, TOKEN_FACTORY_OBJECT_SEED);
+        let registry = borrow_global_mut<TokenRegistry>(owner_obj_addr);
+
+        assert!(registry.admin == owner_addr , E_NOT_AN_OWNER);
+        assert!(registry.plateform_fee_rate != new_fee , E_INVALID_TOKEN_ADDRESS);
+        registry.plateform_fee_rate = new_fee;
+    }
 
     /// Creates a custom fungible token in the DYNA ecosystem.
     ///
@@ -183,7 +183,7 @@ module dynexus_forge::token_factory {
     /// - `E_SYMBOL_TOO_LONG` if symbol > MAX_SYMBOL_LENGTH
     /// - `E_TOKEN_ALREADY_EXISTS` if token with same name/symbol exists
     /// - `E_INVALID_PARAMETERS` for invalid decimals or URIs
-    public fun create_token(
+    public entry fun create_token(
         creator: &signer,
         name: String,
         symbol: String,
@@ -194,18 +194,26 @@ module dynexus_forge::token_factory {
     ) acquires TokenRegistry, ManageFungibleAsset {
 
         let creator_addr = address_of(creator);
-
         let registry_addr = get_token_factory_object_addr();
-        assert_token_factory(registry_addr);
         let registry = borrow_global_mut<TokenRegistry>(registry_addr);
 
-        let token_seed = create_token_seed(&name, &symbol);
-        assert_duplicate_token_by_seed(&registry.tokens_seeds, &token_seed);
+        // Apply Charges
+        if(creator_addr != @dynexus_forge){
+            let dynexus_metadata = address_to_object<Metadata>(registry.dynexus_token);
+            let balance = primary_fungible_store::balance(creator_addr, dynexus_metadata);
+            assert!(balance >= registry.plateform_fee_rate,  E_INSUFFICIENT_DYANEXUS_BALANCE);
+            primary_fungible_store::transfer(creator, dynexus_metadata, registry.admin, registry.plateform_fee_rate);
+        };
 
-        validate_token_parameters(decimals, &icon_uri, &project_uri);
+
+        let token_seed = create_token_seed(&name, &symbol);
+        let token_address = object::create_object_address(&creator_addr, token_seed);
+
+        assert!(!exists<ManageFungibleAsset>(token_address), E_TOKEN_ALREADY_EXISTS);
+        assert!(decimals <= MAX_DECIMAL, E_INVALID_TOKEN_DECIMAL);
+        assert!(icon_uri.length() <= (MAX_URI_LENGTH as u64) || project_uri.length() <= (MAX_URI_LENGTH as u64), E_INVALID_URI_LENGTH);
 
         let constuctor_ref = object::create_named_object(creator, token_seed);
-
         primary_fungible_store::create_primary_store_enabled_fungible_asset(
             &constuctor_ref,
             option::none(),
@@ -227,32 +235,7 @@ module dynexus_forge::token_factory {
             ManageFungibleAsset { mint_ref, burn_ref, transfer_ref, creator: creator_addr }
         );
 
-        let token_info = TokenInfo {
-            name,
-            symbol,
-            decimals,
-            token_address,
-            creator: creator_addr,
-            icon_uri,
-            project_uri,
-            total_supply: inital_supply,
-            created_at: timestamp::now_seconds()
-        };
-
-        registry.tokens.add(token_address, token_info);
-        registry.tokens_seeds.add(token_seed, token_address);
-        registry.total_list.push_back(token_address);
-
-        if (!registry.user_tokens.contains(creator_addr)) {
-            registry.user_tokens.add(
-                creator_addr, UserTokens { created_tokens: vector::empty() }
-            );
-
-            registry.total_users += 1;
-        };
-
-        let user_tokens = registry.user_tokens.borrow_mut(creator_addr);
-        user_tokens.created_tokens.push_back(token_address);
+        registry.total_users += 1;
 
         if (inital_supply > 0) {
             let manage_ref = borrow_global<ManageFungibleAsset>(token_address);
@@ -264,7 +247,6 @@ module dynexus_forge::token_factory {
             TokenCreated {
                 creator: creator_addr,
                 token_address,
-                inital_supply,
                 timestamp: timestamp::now_seconds()
             }
         );
@@ -281,245 +263,57 @@ module dynexus_forge::token_factory {
     ///
     /// # Aborts With
     /// - `E_NOT_AN_OWNER` if caller is not token creator
-    public fun mint_token(
+    public entry fun mint_token(
         owner: &signer,
         to: address,
         token_address: address,
         amount: u64
-    ) acquires ManageFungibleAsset, TokenRegistry {
+    ) acquires ManageFungibleAsset {
         let owner_addr = address_of(owner);
-        assert_is_token_owner(owner_addr, token_address);
 
-        let asset = get_token_metadata(token_address);
+        // Check `ManageFungibleAsset` exist
+        assert!(exists<ManageFungibleAsset>(token_address), E_NOT_AN_OWNER);
 
-        authorized_metadata_refs(owner_addr, asset);
-        let metadata =
-            borrow_global_mut<ManageFungibleAsset>(object::object_address(&asset));
-        let to_wallet = primary_fungible_store::ensure_primary_store_exists(to, asset);
+        // Check ownership
+        let manage_auth = borrow_global<ManageFungibleAsset>(token_address);
+        assert!(manage_auth.creator == owner_addr, E_NOT_AN_OWNER);
 
-        let token = fungible_asset::mint(&metadata.mint_ref, amount);
-        fungible_asset::deposit_with_ref(&metadata.transfer_ref, to_wallet, token);
-    }
-
-    /// Transfers a DYNA-based token between two users
-    ///
-    /// # Parameters
-    /// - `from`: signer initiating the transfer
-    /// - `to`: recipient address
-    /// - `token_address`: address of the token being transferred
-    /// - `amount`: amount to transfer
-    ///
-    /// # Aborts With
-    /// - `E_INSUFFICIENT_BALANCE` if balance is insufficient
-    public entry fun transfer_token(
-        from: &signer,
-        to: address,
-        token_address: address,
-        amount: u64
-    ){
-        let from_addr = address_of(from);
-        assert_sufficinet_balance(from_addr, amount, token_address);
-        primary_fungible_store::transfer(from, object::address_to_object<Metadata>(token_address), to ,amount);
-
-        event::emit(
-            TokenTransfer {
-                from: from_addr,
-                to,
-                token_address,
-                amount,
-                timestamp: timestamp::now_seconds()
-            }
-        );
+        // Transfer minted FA
+        let token = fungible_asset::mint(&manage_auth.mint_ref, amount);
+        primary_fungible_store::deposit_with_ref(&manage_auth.transfer_ref, to, token);
     }
 
     //
     // Helper Functions
     //
 
-    /// Validate token parameters
-    fun validate_token_parameters(
-        decimals: u8, icon_uri: &String, project_uri: &String
-    ) {
-        assert!(decimals <= 18, error::invalid_argument(E_INVALID_PARAMETERS));
-        assert!(icon_uri.length() <= 512, error::invalid_argument(E_INVALID_PARAMETERS));
-        assert!(
-            project_uri.length() <= 512, error::invalid_argument(E_INVALID_PARAMETERS)
-        );
-    }
-
     /// Create token seed
     fun create_token_seed(name: &String, symbol: &String): vector<u8> {
-        let seed = vector::empty<u8>();
+        let seed = TOKEN_SEED;
         seed.append(*name.bytes());
         seed.append(*symbol.bytes());
-
         seed
-    }
-
-    fun is_token_exist(table: &Table<address, TokenInfo>, addr: &address): bool {
-        table.contains(*addr)
-    }
-
-    /// Generate token object creation seed
-    fun generate_token_object_seed(suffix: vector<u8>): vector<u8> {
-        let seed = TOKEN_SEED;
-        seed.append(suffix);
-        seed
-    }
-
-    /// Validate the token authority
-    fun authorized_metadata_refs(
-        owner_addr: address, asset: Object<Metadata>
-    ) {
-        assert_is_objet_owner<Metadata>(owner_addr, asset);
-    }
-
-    /// Checks token is registed or not
-    fun is_token_registered(token: address): bool acquires TokenRegistry {
-        let res_addr = get_token_factory_object_addr();
-        let registry = borrow_global<TokenRegistry>(res_addr);
-        registry.tokens.contains(token)
-    }
-
-    fun get_token_factory_object_addr(): address {
-        object::create_object_address(&CA, TOKEN_FACTORY_OBJECT_SEED)
-    }
-
-    public fun get_token_metadata(
-        token_addr: address
-    ): object::Object<Metadata> acquires TokenRegistry {
-        let registry_addr = get_token_factory_object_addr();
-        assert_token_factory(registry_addr);
-
-        let registry = borrow_global<TokenRegistry>(registry_addr);
-        assert!(registry.tokens.contains(token_addr), E_TOKEN_NOT_EXISTS);
-
-        let token_ref = registry.tokens.borrow(token_addr); // &TokenList
-        let seed = create_token_seed(&token_ref.name, &token_ref.symbol);
-
-        let asset_addr = create_token_object_addr(token_ref.creator, seed);
-        object::address_to_object<Metadata>(asset_addr)
-    }
-
-    /// Get the token object address
-    public fun create_token_object_addr(
-        user_addr: address, seed: vector<u8>
-    ): address {
-        object::create_object_address(&user_addr, seed)
-    }
-
-    public fun get_balance(
-        user_address: address, token_address: address
-    ): u64 {
-        primary_fungible_store::balance(user_address, object::address_to_object<Metadata>(token_address))
     }
 
     //
     // View functions
     //
+    #[view]
+    public fun get_token_factory_object_addr(): address {
+        object::create_object_address(&CA, TOKEN_FACTORY_OBJECT_SEED)
+    }
 
     #[view]
-    public fun get_tokens(): vector<TokenList> acquires TokenRegistry {
-        let registry_addr = get_token_factory_object_addr();
-        assert_token_factory(registry_addr);
-        let registry = borrow_global<TokenRegistry>(registry_addr);
-
-        let tokens = &registry.tokens;
-
-        let res = vector::empty<TokenList>();
-        let token_addresses = registry.total_list;
-
-        let i = 0;
-        while (i < token_addresses.length()) {
-            let addr = token_addresses.borrow(i);
-            if (tokens.contains(*addr)) {
-                let token = tokens.borrow(*addr);
-                res.push_back(
-                    TokenList {
-                        name: token.name,
-                        symbol: token.symbol,
-                        token_address: *addr
-                    }
-                );
-            };
-            i += 1;
-        };
-
-        res
-    }
-
-    //
-    // Asserts
-    //
-
-    /// Assert if token is not registred
-    public fun assert_registered(token: address) acquires TokenRegistry {
-        assert!(is_token_registered(token), E_TOKEN_NOT_EXISTS);
-    }
-
-    fun assert_token_factory(addr: address) {
-        assert!(exists<TokenRegistry>(addr), E_REGISTRY_NOT_EXISTS);
-    }
-
-    /// Assert that token is unique by seed
-    fun assert_duplicate_token_by_seed(
-        table: &Table<vector<u8>, address>, seed: &vector<u8>
-    ) {
-        assert!(!table.contains(*seed), error::already_exists(E_TOKEN_ALREADY_EXISTS))
-    }
-
-    /// Assert that token is unique
-    fun assert_duplicate_token_by_addr(
-        table: &Table<address, TokenInfo>, addr: &address
-    ) {
-        assert!(
-            !is_token_exist(table, addr),
-            error::already_exists(E_TOKEN_ALREADY_EXISTS)
-        )
-    }
-
-    /// Assert that balance is exists
-    fun assert_sufficinet_balance(
-        addr: address, amount: u64, token_address: address
-    ) {
-        assert!(
-            get_balance(addr, token_address) >= amount, error::aborted(E_INSUFFICIENT_BALANCE)
-        );
-    }
-
-    /// Assert if user is not a owner of object
-    public fun assert_is_objet_owner<T: key>(
-        owner_addr: address, asset: Object<T>
-    ) {
-        assert!(object::is_owner<T>(asset, owner_addr), E_NOT_AN_OWNER);
-    }
-
-    /// Assert if user is not a owner of token
-    public fun assert_is_token_owner(
-        owner_addr: address, token_addr: address
-    ) acquires TokenRegistry {
-        let registry_addr = get_token_factory_object_addr();
-        assert_token_factory(registry_addr);
-        let registry = borrow_global<TokenRegistry>(registry_addr);
-
-        assert!(registry.user_tokens.contains(owner_addr), E_NOT_AN_OWNER);
-        assert!(
-            registry.user_tokens.borrow(owner_addr).created_tokens.contains(&token_addr),
-            E_NOT_AN_OWNER
-        );
+    public fun get_token_fa_address(creator: address, name:String, symbol: String): address {
+        let seed = create_token_seed(&name, &symbol);
+        object::create_object_address(&creator, seed)
     }
 
     //
     // Test functions
     //
     #[test_only]
-    public fun initalize_token_factory_with_out_genesis(admin: &signer) {
-        init_module(admin)
-    }
-
-    #[test_only]
-    public fun initalize_token_factory(admin: &signer) {
-        genesis::setup();
+    public fun initalize_token_factory_with_out_genesis(admin: &signer){
         init_module(admin)
     }
 
@@ -532,7 +326,7 @@ module dynexus_forge::token_factory {
         inital_supply: u64,
         icon_uri: String,
         project_uri: String,
-        index: u64
+        _index: u64
     ): (String, String, address) acquires TokenRegistry, ManageFungibleAsset {
         create_token(
             creator,
@@ -544,19 +338,7 @@ module dynexus_forge::token_factory {
             project_uri
         );
 
-        let tokens =get_tokens();
-        let token = tokens[index];
-
-        (token.name, token.symbol, token.token_address)
-    }
-
-    #[test_only]
-    public fun get_token_balance(owner: &signer, token_add: address): u64 acquires TokenRegistry {
-        let asset = get_token_metadata(token_add);
-        let wallet =
-            primary_fungible_store::ensure_primary_store_exists(
-                address_of(owner), asset
-            );
-        fungible_asset::balance(wallet)
+        let seed = create_token_seed(&name, &symbol);
+        (name, symbol, object::create_object_address(&address_of(creator), seed))
     }
 }

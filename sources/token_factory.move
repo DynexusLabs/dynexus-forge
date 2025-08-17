@@ -3,6 +3,7 @@ module dynexus_forge::token_factory {
     use std::option;
     use std::signer::address_of;
     use std::string::{String};
+    use aptos_std::table;
     use aptos_framework::event;
     use aptos_framework::fungible_asset::{Self, MintRef, TransferRef, BurnRef, Metadata};
     use aptos_framework::object::{Self, ExtendRef, address_to_object};
@@ -13,6 +14,7 @@ module dynexus_forge::token_factory {
     //
     // Constants
     //
+
     /// Contract addresss
     const CA: address = @dynexus_forge;
     /// Token creation seed
@@ -63,6 +65,9 @@ module dynexus_forge::token_factory {
     /// User has insufficient balance of dynexus.
     const E_INSUFFICIENT_DYANEXUS_BALANCE: u64 = 12;
 
+    /// User requested for early faucet
+    const E_EARLY_FAUCET: u64 = 13;
+
 
     //
     // Structs
@@ -75,8 +80,15 @@ module dynexus_forge::token_factory {
         admin: address,
         plateform_fee_rate: u64,
 
+
+        // Faucet
+        faucet_period: u64,
+        faucet_amount: u64,
+        faucet_history: table::Table<address, u64>,
+
         // Statistics
         total_users: u64,
+
 
         // extending object signer
         extend_ref: ExtendRef
@@ -108,11 +120,10 @@ module dynexus_forge::token_factory {
     }
 
     #[event]
-    struct TokenTransfer has drop, store {
-        from: address,
-        to: address,
-        token_address: address,
+    struct FaucetDynexus has drop, store {
+        user: address,
         amount: u64,
+        next_period: u64
     }
 
     //
@@ -135,6 +146,9 @@ module dynexus_forge::token_factory {
                 admin: admin_addr,
                 total_users: 0,
                 plateform_fee_rate: 5, // DYNEXUS token
+                faucet_period: 600, // In seconds
+                faucet_amount: 5,
+                faucet_history: table::new(),
                 extend_ref,
                 dynexus_token: @0x0
             }
@@ -163,6 +177,53 @@ module dynexus_forge::token_factory {
         assert!(registry.admin == owner_addr , E_NOT_AN_OWNER);
         assert!(registry.plateform_fee_rate != new_fee , E_INVALID_TOKEN_ADDRESS);
         registry.plateform_fee_rate = new_fee;
+    }
+
+    public entry fun set_dynexus_faucet_period(owner: &signer, new_period: u64) acquires TokenRegistry {
+        let owner_addr = address_of(owner);
+        let owner_obj_addr = object::create_object_address(&owner_addr, TOKEN_FACTORY_OBJECT_SEED);
+        let registry = borrow_global_mut<TokenRegistry>(owner_obj_addr);
+
+        assert!(registry.admin == owner_addr , E_NOT_AN_OWNER);
+        assert!(registry.faucet_period != new_period , E_INVALID_TOKEN_ADDRESS);
+        registry.faucet_period = new_period;
+    }
+
+    public entry fun set_dynexus_faucet_amount(owner: &signer, new_amount: u64) acquires TokenRegistry {
+        let owner_addr = address_of(owner);
+        let owner_obj_addr = object::create_object_address(&owner_addr, TOKEN_FACTORY_OBJECT_SEED);
+        let registry = borrow_global_mut<TokenRegistry>(owner_obj_addr);
+
+        assert!(registry.admin == owner_addr , E_NOT_AN_OWNER);
+        assert!(registry.faucet_amount != new_amount , E_INVALID_TOKEN_ADDRESS);
+        registry.faucet_amount = new_amount;
+    }
+
+    public entry fun faucet_dynexus(user: &signer) acquires TokenRegistry, ManageFungibleAsset {
+        let user_addr = address_of(user);
+
+        let dynexus_obj_addr = get_token_factory_object_addr();
+        let registry = borrow_global_mut<TokenRegistry>(dynexus_obj_addr);
+        let current_time = timestamp::now_seconds();
+
+        if(registry.faucet_history.contains(user_addr)){
+            let history = *registry.faucet_history.borrow(user_addr);
+            assert!(current_time > history, E_EARLY_FAUCET)
+        };
+
+        let faucet_amount = registry.faucet_amount;
+        let manage_dynexus = borrow_global<ManageFungibleAsset>(dynexus_obj_addr);
+        let dynexus = fungible_asset::mint(&manage_dynexus.mint_ref, faucet_amount);
+        primary_fungible_store::deposit(user_addr, dynexus);
+
+        let next_period = current_time + registry.faucet_period;
+        registry.faucet_history.upsert(user_addr, next_period);
+
+        event::emit(FaucetDynexus{
+            user: user_addr,
+            amount: faucet_amount,
+            next_period
+        })
     }
 
     /// Creates a custom fungible token in the DYNA ecosystem.

@@ -9,6 +9,7 @@ module dynexus_forge::token_factory {
     use aptos_framework::object::{Self, ExtendRef, address_to_object};
     use aptos_framework::primary_fungible_store;
     use aptos_framework::timestamp;
+    use dev::utils::print_formatted;
 
 
     //
@@ -171,7 +172,7 @@ module dynexus_forge::token_factory {
 
     public entry fun set_dynexus_plateform_fee_rate(owner: &signer, new_fee: u64) acquires TokenRegistry {
         let owner_addr = address_of(owner);
-        let owner_obj_addr = object::create_object_address(&owner_addr, TOKEN_FACTORY_OBJECT_SEED);
+        let owner_obj_addr = get_token_factory_object_addr();
         let registry = borrow_global_mut<TokenRegistry>(owner_obj_addr);
 
         assert!(registry.admin == owner_addr , E_NOT_AN_OWNER);
@@ -181,7 +182,7 @@ module dynexus_forge::token_factory {
 
     public entry fun set_dynexus_faucet_period(owner: &signer, new_period: u64) acquires TokenRegistry {
         let owner_addr = address_of(owner);
-        let owner_obj_addr = object::create_object_address(&owner_addr, TOKEN_FACTORY_OBJECT_SEED);
+        let owner_obj_addr = get_token_factory_object_addr();
         let registry = borrow_global_mut<TokenRegistry>(owner_obj_addr);
 
         assert!(registry.admin == owner_addr , E_NOT_AN_OWNER);
@@ -191,7 +192,7 @@ module dynexus_forge::token_factory {
 
     public entry fun set_dynexus_faucet_amount(owner: &signer, new_amount: u64) acquires TokenRegistry {
         let owner_addr = address_of(owner);
-        let owner_obj_addr = object::create_object_address(&owner_addr, TOKEN_FACTORY_OBJECT_SEED);
+        let owner_obj_addr = get_token_factory_object_addr();
         let registry = borrow_global_mut<TokenRegistry>(owner_obj_addr);
 
         assert!(registry.admin == owner_addr , E_NOT_AN_OWNER);
@@ -212,7 +213,7 @@ module dynexus_forge::token_factory {
         };
 
         let faucet_amount = registry.faucet_amount;
-        let manage_dynexus = borrow_global<ManageFungibleAsset>(dynexus_obj_addr);
+        let manage_dynexus = borrow_global<ManageFungibleAsset>(registry.dynexus_token);
         let dynexus = fungible_asset::mint(&manage_dynexus.mint_ref, faucet_amount);
         primary_fungible_store::deposit(user_addr, dynexus);
 
@@ -359,6 +360,19 @@ module dynexus_forge::token_factory {
     //
     // View functions
     //
+    #[view]
+    public fun get_dynexus_config(): (address, address, u64, u64, u64, u64) acquires TokenRegistry {
+        let config = borrow_global<TokenRegistry>(get_token_factory_object_addr());
+        (
+            config.dynexus_token,
+            config.admin,
+            config.plateform_fee_rate,
+            config.faucet_period,
+            config.faucet_amount,
+            config.total_users,
+        )
+    }
+
     #[view]
     public fun get_token_factory_object_addr(): address {
         object::create_object_address(&CA, TOKEN_FACTORY_OBJECT_SEED)

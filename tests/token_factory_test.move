@@ -7,7 +7,14 @@ module dynexus_forge::token_factory_test {
     use aptos_framework::genesis;
     use aptos_framework::object::address_to_object;
     use aptos_framework::primary_fungible_store;
+    use aptos_framework::timestamp;
     use dynexus_forge::token_factory;
+
+    const TEST_ADMIN: address = @0x123;
+    const TEST_USER: address = @0x456;
+    const INITIAL_FAUCET_AMOUNT: u64 = 1000;
+    const INITIAL_FAUCET_PERIOD: u64 = 600; // 1 day in seconds
+    const INITIAL_PLATFORM_FEE_RATE: u64 = 5; // 0.5%
 
     public fun create_dynexus_token(): address{
         let dynexus = &create_signer_for_test(@dynexus_forge);
@@ -42,6 +49,7 @@ module dynexus_forge::token_factory_test {
     public fun setup_token_factory(user: address){
         let dynexus = &create_signer_for_test(@dynexus_forge);
         token_factory::initalize_token_factory_with_out_genesis(dynexus);
+        token_factory::set_dynexus_faucet_amount(dynexus, 100);
 
         let token_address = create_dynexus_token();
         token_factory::mint_token(dynexus, user, token_address, 1000)
@@ -633,5 +641,159 @@ module dynexus_forge::token_factory_test {
             long_uri,
             0
         );
+    }
+
+    #[test]
+    fun test_initialize_and_admin_functions() {
+        // Initialize the token factory
+        initalize_token_factory(TEST_ADMIN);
+
+        let admin = create_signer_for_test(@dynexus_forge);
+        // Verify initial values
+        let (
+            _,
+            admin_addr,
+            plateform_fee_rate,
+            faucet_period,
+            _,
+            _,
+        ) = token_factory::get_dynexus_config();
+
+        assert!(admin_addr == @dynexus_forge, 0);
+        assert!(faucet_period == INITIAL_FAUCET_PERIOD, 2);
+        assert!(plateform_fee_rate == INITIAL_PLATFORM_FEE_RATE, 3);
+
+        // Test setting new platform fee rate (admin only)
+        let new_fee = 100; // 1%
+        token_factory::set_dynexus_plateform_fee_rate(&admin, new_fee);
+        let (
+            _,
+            _,
+            plateform_fee_rate,
+            _,
+            _,
+            _,
+        ) = token_factory::get_dynexus_config();
+        assert!(plateform_fee_rate == new_fee, 4);
+
+        // Test setting new faucet period (admin only)
+        let new_period = 43200; // 12 hours
+        token_factory::set_dynexus_faucet_period(&admin, new_period);
+        let (
+            _,
+            _,
+            _,
+            faucet_period,
+            _,
+            _,
+        ) = token_factory::get_dynexus_config();
+        assert!(faucet_period == new_period, 5);
+
+        // Test setting new faucet amount (admin only)
+        let new_amount = 2000;
+        token_factory::set_dynexus_faucet_amount(&admin, new_amount);
+        let (
+            _,
+            _,
+            _,
+            _,
+            faucet_amount,
+            _,
+        ) = token_factory::get_dynexus_config();
+        assert!(faucet_amount == new_amount, 6);
+    }
+
+    #[test]
+    fun test_faucet_functionality() {
+        initalize_token_factory(TEST_ADMIN);
+
+        let admin = create_signer_for_test(@dynexus_forge);
+        let user = create_signer_for_test(TEST_USER);
+        // Initialize with known values
+        token_factory::set_dynexus_faucet_amount(&admin, INITIAL_FAUCET_AMOUNT);
+        let new_period = INITIAL_FAUCET_PERIOD+ 10;
+        token_factory::set_dynexus_faucet_period(&admin, new_period);
+
+        let (
+            token_address,
+            _,
+            _,
+            _,
+            _,
+            _,
+        ) = token_factory::get_dynexus_config();
+
+        // First faucet claim should succeed
+        let initial_balance = balance_of(TEST_USER, token_address);
+        token_factory::faucet_dynexus(&user);
+        let new_balance = balance_of(TEST_USER, token_address);
+        assert!(new_balance == initial_balance + INITIAL_FAUCET_AMOUNT, 11);
+
+        timestamp::fast_forward_seconds(new_period+1);
+        token_factory::faucet_dynexus(&user);
+    }
+
+    #[test]
+    #[expected_failure]
+    fun test_faucet_functionality_failed() {
+        let admin = create_signer_for_test(TEST_ADMIN);
+        let user = create_signer_for_test(TEST_USER);
+
+        // Initialize with known values
+        initalize_token_factory(TEST_ADMIN);
+        token_factory::set_dynexus_faucet_amount(&admin, INITIAL_FAUCET_AMOUNT);
+        token_factory::set_dynexus_faucet_period(&admin, INITIAL_FAUCET_PERIOD);
+
+        let (
+            token_address,
+            _,
+            _,
+            _,
+            _,
+            _,
+        ) = token_factory::get_dynexus_config();
+
+        // First faucet claim should succeed
+        let initial_balance = balance_of(TEST_USER, token_address);
+        token_factory::faucet_dynexus(&user);
+        let new_balance = balance_of(TEST_USER, token_address);
+        assert!(new_balance == initial_balance + INITIAL_FAUCET_AMOUNT, 11);
+        token_factory::faucet_dynexus(&user);
+
+        timestamp::fast_forward_seconds(INITIAL_FAUCET_PERIOD+1);
+        token_factory::faucet_dynexus(&user);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = token_factory::E_NOT_AN_OWNER)]
+    fun test_non_admin_cannot_set_fee() {
+        initalize_token_factory(TEST_USER);
+        let user = create_signer_for_test(TEST_USER);
+        token_factory::set_dynexus_plateform_fee_rate(&user, 100);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = token_factory::E_NOT_AN_OWNER)]
+    fun test_non_admin_cannot_set_period() {
+        initalize_token_factory(TEST_USER);
+        let user = create_signer_for_test(TEST_USER);
+        token_factory::set_dynexus_faucet_period(&user, 3600);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = token_factory::E_NOT_AN_OWNER)]
+    fun test_non_admin_cannot_set_amount() {
+        initalize_token_factory(TEST_USER);
+        let user = create_signer_for_test(TEST_USER);
+        token_factory::set_dynexus_faucet_amount(&user, 5000);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = token_factory::E_EARLY_FAUCET)]
+    fun test_early_faucet_fails() {
+        initalize_token_factory(TEST_ADMIN);
+        let user = create_signer_for_test(TEST_USER);
+        token_factory::faucet_dynexus(&user);
+        token_factory::faucet_dynexus(&user); // Immediate second call
     }
 }

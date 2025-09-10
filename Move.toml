@@ -4,12 +4,12 @@ version = "1.0.0"
 authors = ["Meet Rathod"]
 
 [addresses]
-dynexus_forge = "0xe95613a20a4f2cd2e626e76a51bceab0fe564aaaadb844a2a942b236f710504a"
+dynexus_forge = "0a942e3fc8e3a5b88c7f9aa7b55a0be4ded9764294d97bb75f32e064a25f057d"
 
 [dependencies.AptosFramework]
 git = "https://github.com/aptos-labs/aptos-framework.git"
 rev = "mainnet"
 subdir = "aptos-framework"
 
-[dependencies]
-AptosMoveUtils = { git = "https://github.com/mrathod05/aptos-move-utils.git", rev = "mainnet" }
+#[dependencies]
+#AptosMoveUtils = { git = "https://github.com/mrathod05/aptos-move-utils.git", rev = "mainnet" }

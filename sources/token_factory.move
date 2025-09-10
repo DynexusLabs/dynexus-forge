@@ -9,7 +9,6 @@ module dynexus_forge::token_factory {
     use aptos_framework::object::{Self, ExtendRef, address_to_object};
     use aptos_framework::primary_fungible_store;
     use aptos_framework::timestamp;
-    use dev::utils::print_formatted;
 
 
     //

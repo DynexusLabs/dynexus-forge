@@ -1,10 +1,13 @@
 [package]
 name = "DynexusForge"
-version = "1.0.0"
+version = "1.1.0"
 authors = ["Meet Rathod"]
 
 [addresses]
-dynexus_forge = "0xe95613a20a4f2cd2e626e76a51bceab0fe564aaaadb844a2a942b236f710504a"
+dynexus_forge = "_"
+
+[dev-addresses]
+dynexus_forge = "0xf0"
 
 [dependencies.AptosFramework]
 git = "https://github.com/aptos-labs/aptos-framework.git"

@@ -15,7 +15,6 @@ module dynexus_forge::token_factory_test {
     const INITIAL_FAUCET_AMOUNT: u64 = 1000;
     const INITIAL_FAUCET_PERIOD: u64 = 600; // 1 day in seconds
     const INITIAL_PLATFORM_FEE_RATE: u64 = 5; // 0.5%
-
     public fun create_dynexus_token(): address {
         let dynexus = &create_signer_for_test(@dynexus_forge);
 
@@ -50,10 +49,7 @@ module dynexus_forge::token_factory_test {
     }
 
     public fun transfer_token(
-        from: &signer,
-        to: address,
-        token_add: address,
-        amount: u64
+        from: &signer, to: address, token_add: address, amount: u64
     ) {
         primary_fungible_store::transfer(
             from,
@@ -690,8 +686,9 @@ module dynexus_forge::token_factory_test {
 
         let admin = create_signer_for_test(@dynexus_forge);
         // Verify initial values
-        let (_, admin_addr, plateform_fee_rate, faucet_period, _, _) =
-            token_factory::get_dynexus_config();
+        let (
+            _, admin_addr, plateform_fee_rate, faucet_period, _, _
+        ) = token_factory::get_dynexus_config();
 
         assert!(admin_addr == @dynexus_forge, 0);
         assert!(faucet_period == INITIAL_FAUCET_PERIOD, 2);
@@ -734,8 +731,7 @@ module dynexus_forge::token_factory_test {
         token_factory::faucet_dynexus(&user);
         let new_balance = balance_of(TEST_USER, token_address);
         assert!(
-            new_balance == initial_balance + INITIAL_FAUCET_AMOUNT,
-            11
+            new_balance == initial_balance + INITIAL_FAUCET_AMOUNT, 11
         );
 
         timestamp::fast_forward_seconds(new_period + 1);
@@ -760,8 +756,7 @@ module dynexus_forge::token_factory_test {
         token_factory::faucet_dynexus(&user);
         let new_balance = balance_of(TEST_USER, token_address);
         assert!(
-            new_balance == initial_balance + INITIAL_FAUCET_AMOUNT,
-            11
+            new_balance == initial_balance + INITIAL_FAUCET_AMOUNT, 11
         );
         token_factory::faucet_dynexus(&user);
 
@@ -805,7 +800,6 @@ module dynexus_forge::token_factory_test {
     //
     // Hardening / new feature tests
     //
-
     fun long_uri(): string::String {
         let bytes = b"https://example.com/";
         let i = 0;
@@ -854,12 +848,10 @@ module dynexus_forge::token_factory_test {
             );
 
         assert!(
-            balance_of(TEST_USER, dynexus) == user_before - fee,
-            1
+            balance_of(TEST_USER, dynexus) == user_before - fee, 1
         );
         assert!(
-            balance_of(@dynexus_forge, dynexus) == admin_before + fee,
-            2
+            balance_of(@dynexus_forge, dynexus) == admin_before + fee, 2
         );
 
         let (_, _, _, _, _, after_count) = token_factory::get_dynexus_config();
@@ -869,8 +861,9 @@ module dynexus_forge::token_factory_test {
         assert!(token_factory::get_tokens_by_creator(TEST_USER) == vector[token], 5);
         assert!(token_factory::is_factory_token(token), 6);
 
-        let (creator, name, symbol, decimals, supply, _, _) =
-            token_factory::get_token_info(token);
+        let (
+            creator, name, symbol, decimals, supply, _, _
+        ) = token_factory::get_token_info(token);
         assert!(creator == TEST_USER, 7);
         assert!(name == string::utf8(b"Indexed"), 8);
         assert!(symbol == string::utf8(b"IDX"), 9);

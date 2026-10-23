@@ -82,7 +82,6 @@ module dynexus_forge::token_factory {
     //
     // Structs
     //
-
     struct TokenRegistry has key {
         //
         dynexus_token: address,
@@ -123,7 +122,6 @@ module dynexus_forge::token_factory {
     //
     // Events
     //
-
     #[event]
     struct TokenCreated has drop, store {
         creator: address,
@@ -187,7 +185,6 @@ module dynexus_forge::token_factory {
     //
     // Admin
     //
-
     public entry fun set_dynexus_token(
         owner: &signer, new_address: address
     ) acquires TokenRegistry {
@@ -240,7 +237,6 @@ module dynexus_forge::token_factory {
     //
     // Faucet & DYNEXUS minting
     //
-
     public entry fun faucet_dynexus(user: &signer) acquires TokenRegistry, ManageFungibleAsset {
         let user_addr = address_of(user);
 
@@ -261,7 +257,11 @@ module dynexus_forge::token_factory {
         let next_period = current_time + registry.faucet_period;
         registry.faucet_history.upsert(user_addr, next_period);
 
-        event::emit(FaucetDynexus { user: user_addr, amount: faucet_amount, next_period })
+        event::emit(FaucetDynexus {
+            user: user_addr,
+            amount: faucet_amount,
+            next_period
+        })
     }
 
     /// Mint DYNEXUS for an approved minter contract (used for protocol emissions).
@@ -362,7 +362,12 @@ module dynexus_forge::token_factory {
 
         move_to(
             &token_signer,
-            ManageFungibleAsset { mint_ref, burn_ref, transfer_ref, creator: creator_addr }
+            ManageFungibleAsset {
+                mint_ref,
+                burn_ref,
+                transfer_ref,
+                creator: creator_addr
+            }
         );
 
         // Index
@@ -393,10 +398,7 @@ module dynexus_forge::token_factory {
     /// # Aborts With
     /// - `E_NOT_AN_OWNER` if caller is not token creator
     public entry fun mint_token(
-        owner: &signer,
-        to: address,
-        token_address: address,
-        amount: u64
+        owner: &signer, to: address, token_address: address, amount: u64
     ) acquires ManageFungibleAsset {
         let owner_addr = address_of(owner);
 
@@ -448,7 +450,6 @@ module dynexus_forge::token_factory {
     //
     // View functions
     //
-
     #[view]
     /// Returns (dynexus_token, admin, platform_fee, faucet_period, faucet_amount, total_tokens)
     public fun get_dynexus_config(): (address, address, u64, u64, u64, u64) acquires TokenRegistry {
@@ -527,7 +528,9 @@ module dynexus_forge::token_factory {
     /// Returns (creator, name, symbol, decimals, supply, icon_uri, project_uri)
     public fun get_token_info(
         token_address: address
-    ): (address, String, String, u8, u128, String, String) acquires ManageFungibleAsset {
+    ): (
+        address, String, String, u8, u128, String, String
+    ) acquires ManageFungibleAsset {
         assert!(exists<ManageFungibleAsset>(token_address), E_TOKEN_NOT_EXISTS);
         let creator = borrow_global<ManageFungibleAsset>(token_address).creator;
         let metadata: Object<Metadata> = address_to_object<Metadata>(token_address);
@@ -547,13 +550,14 @@ module dynexus_forge::token_factory {
 
     #[view]
     public fun is_dynexus_minter(minter: address): bool acquires TokenRegistry {
-        borrow_global<TokenRegistry>(get_token_factory_object_addr()).minters.contains(&minter)
+        borrow_global<TokenRegistry>(get_token_factory_object_addr()).minters.contains(
+            &minter
+        )
     }
 
     //
     // Test functions
     //
-
     #[test_only]
     public fun initalize_token_factory_with_out_genesis(admin: &signer) {
         init_module(admin)
@@ -581,6 +585,10 @@ module dynexus_forge::token_factory {
         );
 
         let seed = create_token_seed(&name, &symbol);
-        (name, symbol, object::create_object_address(&address_of(creator), seed))
+        (
+            name,
+            symbol,
+            object::create_object_address(&address_of(creator), seed)
+        )
     }
 }

@@ -23,9 +23,9 @@
 
 ## 🚀 Usage
 
-Coming soon: CLI + Web UI  
-For now, deploy using the Aptos CLI:
-
 ```bash
-aptos move publish --package-dir forge
+bun install        # dev tooling + git hooks
+bun run test       # aptos move test
 ```
+
+Deploy and operate with the Aptos CLI — see [Cli.md](Cli.md).

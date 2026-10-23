@@ -1,23 +1,31 @@
 # Dynexus Forge CLI
 
-Command-line interface for managing Dynexus tokens on the Aptos blockchain.
+Command-line reference for deploying and operating Dynexus Forge on Aptos.
 
 ## Configuration
 
-Set the contract address:
+The package uses a placeholder named address (`dynexus_forge = "_"`). Pick the deployer
+profile and export its address:
 
 ```bash
-export CA='0x0a942e3fc8e3a5b88c7f9aa7b55a0be4ded9764294d97bb75f32e064a25f057d'
+export PROFILE=dynexus-testnet
+export CA=$(aptos config show-profiles --profile $PROFILE | grep '"account"' | cut -d'"' -f4)
 ```
 
-## Commands
-
-### Create Dynexus Token
-
-Creates a new Dynexus token with initial parameters.
+## Deploy
 
 ```bash
-aptos move run \
+aptos move publish --profile $PROFILE --named-addresses dynexus_forge=$CA
+```
+
+## Bootstrap DYNEXUS
+
+### Create the DYNEXUS token
+
+The admin is exempt from the creation fee, so this works before DYNEXUS exists.
+
+```bash
+aptos move run --profile $PROFILE \
   --function-id $CA::token_factory::create_token \
   --args \
     string:"DYNEXUS" \
@@ -28,63 +36,57 @@ aptos move run \
     string:"https://dynexus.netlify.app/"
 ```
 
-Parameters:
-
-- Token name: `DYNEXUS`
-- Token symbol: `DYNEXUS`
-- Decimals: `8`
-- Initial supply: `1,000,000,000,000` (1 trillion)
-- Metadata URI: IPFS hosted metadata
-- Website: Project homepage
-
-### Set Token Address
-
-Registers the deployed token address in the contract.
+### Register it as the platform token
 
 ```bash
-aptos move run \
+export DYNEXUS=$(aptos move view --profile $PROFILE \
+  --function-id $CA::token_factory::get_token_fa_address \
+  --args address:$CA string:"DYNEXUS" string:"DYNEXUS" | grep 0x | tr -d ' "')
+
+aptos move run --profile $PROFILE \
   --function-id $CA::token_factory::set_dynexus_token \
-  --args address:0xf8ec309b09efa2ca5b4f697ce012ebb0597b96c0b8f1893af34764a7e8ed809f
+  --args address:$DYNEXUS
 ```
 
-### Faucet Tokens
+## Admin
 
-Claims tokens from the faucet.
+| Function                         | Args             | Notes                                   |
+| -------------------------------- | ---------------- | --------------------------------------- |
+| `set_dynexus_plateform_fee_rate` | `u64` fee        | Flat fee per token creation, base units |
+| `set_dynexus_faucet_period`      | `u64` seconds    | Cooldown between faucet claims          |
+| `set_dynexus_faucet_amount`      | `u64` amount     | Base units per claim                    |
+| `add_dynexus_minter`             | `address` minter | Allow a contract to call `mint_dynexus` |
+| `remove_dynexus_minter`          | `address` minter | Revoke                                  |
+
+Example — allow the Dynexus Core emissions minter:
 
 ```bash
-aptos move run \
-  --function-id $CA::token_factory::faucet_dynexus
+aptos move run --profile $PROFILE \
+  --function-id $CA::token_factory::add_dynexus_minter \
+  --args address:$CORE_MINTER
 ```
 
-## Quick Setup
+## Users
 
 ```bash
-# Set contract address
-export CA='0x0a942e3fc8e3a5b88c7f9aa7b55a0be4ded9764294d97bb75f32e064a25f057d'
-
-# Create token
-aptos move run --function-id $CA::token_factory::create_token --args string:"DYNEXUS" string:"DYNEXUS" u8:8 u64:1000000000000 string:"https://lavender-binding-jackal-744.mypinata.cloud/ipfs/bafybeiega65r37e6htyrgfxkqsxt36pnldpjmhmw7imyemfrub62l6sjiy" string:"https://dynexus.netlify.app/"
-
-# Set token address
-aptos move run --function-id $CA::token_factory::set_dynexus_token --args address:0xf8ec309b09efa2ca5b4f697ce012ebb0597b96c0b8f1893af34764a7e8ed809f
-
-# Claim faucet tokens
-aptos move run --function-id $CA::token_factory::faucet_dynexus
-```
-
-## Batch Script
-
-```bash
-#!/bin/bash
-# dynexus-setup.sh
-
-CA='0x0a942e3fc8e3a5b88c7f9aa7b55a0be4ded9764294d97bb75f32e064a25f057d'
-TOKEN_ADDRESS='0xf8ec309b09efa2ca5b4f697ce012ebb0597b96c0b8f1893af34764a7e8ed809f'
-
-echo "Setting up Dynexus..."
-
-aptos move run --function-id $CA::token_factory::set_dynexus_token --args address:$TOKEN_ADDRESS
+# Claim faucet DYNEXUS
 aptos move run --function-id $CA::token_factory::faucet_dynexus
 
-echo "Setup complete!"
+# Mint more of a token you created
+aptos move run --function-id $CA::token_factory::mint_token \
+  --args address:$TO address:$TOKEN u64:1000
+
+# Burn your own balance of a factory token
+aptos move run --function-id $CA::token_factory::burn_token \
+  --args address:$TOKEN u64:1000
+```
+
+## Views
+
+```bash
+aptos move view --function-id $CA::token_factory::get_dynexus_config
+aptos move view --function-id $CA::token_factory::get_tokens --args u64:0 u64:50
+aptos move view --function-id $CA::token_factory::get_tokens_by_creator --args address:$USER
+aptos move view --function-id $CA::token_factory::get_token_info --args address:$TOKEN
+aptos move view --function-id $CA::token_factory::get_next_faucet_time --args address:$USER
 ```

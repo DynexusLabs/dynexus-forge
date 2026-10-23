@@ -15,7 +15,6 @@ module dynexus_forge::token_factory_test {
     const INITIAL_FAUCET_AMOUNT: u64 = 1000;
     const INITIAL_FAUCET_PERIOD: u64 = 600; // 1 day in seconds
     const INITIAL_PLATFORM_FEE_RATE: u64 = 5; // 0.5%
-
     public fun create_dynexus_token(): address {
         let dynexus = &create_signer_for_test(@dynexus_forge);
 
@@ -50,10 +49,7 @@ module dynexus_forge::token_factory_test {
     }
 
     public fun transfer_token(
-        from: &signer,
-        to: address,
-        token_add: address,
-        amount: u64
+        from: &signer, to: address, token_add: address, amount: u64
     ) {
         primary_fungible_store::transfer(
             from,
@@ -690,8 +686,9 @@ module dynexus_forge::token_factory_test {
 
         let admin = create_signer_for_test(@dynexus_forge);
         // Verify initial values
-        let (_, admin_addr, plateform_fee_rate, faucet_period, _, _) =
-            token_factory::get_dynexus_config();
+        let (
+            _, admin_addr, plateform_fee_rate, faucet_period, _, _
+        ) = token_factory::get_dynexus_config();
 
         assert!(admin_addr == @dynexus_forge, 0);
         assert!(faucet_period == INITIAL_FAUCET_PERIOD, 2);
@@ -734,8 +731,7 @@ module dynexus_forge::token_factory_test {
         token_factory::faucet_dynexus(&user);
         let new_balance = balance_of(TEST_USER, token_address);
         assert!(
-            new_balance == initial_balance + INITIAL_FAUCET_AMOUNT,
-            11
+            new_balance == initial_balance + INITIAL_FAUCET_AMOUNT, 11
         );
 
         timestamp::fast_forward_seconds(new_period + 1);
@@ -760,8 +756,7 @@ module dynexus_forge::token_factory_test {
         token_factory::faucet_dynexus(&user);
         let new_balance = balance_of(TEST_USER, token_address);
         assert!(
-            new_balance == initial_balance + INITIAL_FAUCET_AMOUNT,
-            11
+            new_balance == initial_balance + INITIAL_FAUCET_AMOUNT, 11
         );
         token_factory::faucet_dynexus(&user);
 
@@ -800,5 +795,209 @@ module dynexus_forge::token_factory_test {
         let user = create_signer_for_test(TEST_USER);
         token_factory::faucet_dynexus(&user);
         token_factory::faucet_dynexus(&user); // Immediate second call
+    }
+
+    //
+    // Hardening / new feature tests
+    //
+    fun long_uri(): string::String {
+        let bytes = b"https://example.com/";
+        let i = 0;
+        while (i < 500) {
+            bytes.push_back(97);
+            i += 1;
+        };
+        string::utf8(bytes)
+    }
+
+    #[test]
+    #[expected_failure(abort_code = token_factory::E_INVALID_URI_LENGTH)]
+    fun test_long_project_uri_only_fails() {
+        initalize_token_factory(TEST_USER);
+        let user = create_signer_for_test(TEST_USER);
+        token_factory::create_test_token(
+            &user,
+            string::utf8(b"Short"),
+            string::utf8(b"SHT"),
+            6,
+            1,
+            string::utf8(b""),
+            long_uri(),
+            0
+        );
+    }
+
+    #[test]
+    fun test_create_token_charges_fee_and_indexes() {
+        initalize_token_factory(TEST_USER);
+        let user = create_signer_for_test(TEST_USER);
+        let (dynexus, _, fee, _, _, before_count) = token_factory::get_dynexus_config();
+        let user_before = balance_of(TEST_USER, dynexus);
+        let admin_before = balance_of(@dynexus_forge, dynexus);
+
+        let (_, _, token) =
+            token_factory::create_test_token(
+                &user,
+                string::utf8(b"Indexed"),
+                string::utf8(b"IDX"),
+                8,
+                500,
+                string::utf8(b""),
+                string::utf8(b""),
+                0
+            );
+
+        assert!(
+            balance_of(TEST_USER, dynexus) == user_before - fee, 1
+        );
+        assert!(
+            balance_of(@dynexus_forge, dynexus) == admin_before + fee, 2
+        );
+
+        let (_, _, _, _, _, after_count) = token_factory::get_dynexus_config();
+        assert!(after_count == before_count + 1, 3);
+        let page = token_factory::get_tokens(before_count, 10);
+        assert!(page == vector[token], 4);
+        assert!(token_factory::get_tokens_by_creator(TEST_USER) == vector[token], 5);
+        assert!(token_factory::is_factory_token(token), 6);
+
+        let (
+            creator, name, symbol, decimals, supply, _, _
+        ) = token_factory::get_token_info(token);
+        assert!(creator == TEST_USER, 7);
+        assert!(name == string::utf8(b"Indexed"), 8);
+        assert!(symbol == string::utf8(b"IDX"), 9);
+        assert!(decimals == 8, 10);
+        assert!(supply == 500, 11);
+    }
+
+    #[test]
+    fun test_get_tokens_pagination_bounds() {
+        initalize_token_factory(TEST_USER);
+        let (_, _, _, _, _, count) = token_factory::get_dynexus_config();
+        assert!(token_factory::get_tokens(count, 10).length() == 0, 1);
+        assert!(token_factory::get_tokens(18446744073709551615, 10).length() == 0, 2);
+        assert!(token_factory::get_tokens(0, 18446744073709551615).length() == count, 3);
+        assert!(token_factory::get_tokens_by_creator(@0xbeef).length() == 0, 4);
+    }
+
+    #[test]
+    fun test_burn_token() {
+        initalize_token_factory(TEST_USER);
+        let user = create_signer_for_test(TEST_USER);
+        let (_, _, token) =
+            token_factory::create_test_token(
+                &user,
+                string::utf8(b"Burnable"),
+                string::utf8(b"BRN"),
+                6,
+                1000,
+                string::utf8(b""),
+                string::utf8(b""),
+                0
+            );
+        token_factory::burn_token(&user, token, 400);
+        assert!(balance_of(TEST_USER, token) == 600, 1);
+        let (_, _, _, _, supply, _, _) = token_factory::get_token_info(token);
+        assert!(supply == 600, 2);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = token_factory::E_ZERO_AMOUNT)]
+    fun test_burn_zero_fails() {
+        initalize_token_factory(TEST_USER);
+        let user = create_signer_for_test(TEST_USER);
+        let (dynexus, _, _, _, _, _) = token_factory::get_dynexus_config();
+        token_factory::burn_token(&user, dynexus, 0);
+    }
+
+    #[test]
+    fun test_minter_lifecycle() {
+        initalize_token_factory(TEST_USER);
+        let admin = create_signer_for_test(@dynexus_forge);
+        let minter = create_signer_for_test(@0xc0de);
+        let (dynexus, _, _, _, _, _) = token_factory::get_dynexus_config();
+
+        token_factory::add_dynexus_minter(&admin, @0xc0de);
+        assert!(token_factory::is_dynexus_minter(@0xc0de), 1);
+
+        let fa = token_factory::mint_dynexus(&minter, 777);
+        primary_fungible_store::deposit(@0xc0de, fa);
+        assert!(balance_of(@0xc0de, dynexus) == 777, 2);
+
+        token_factory::remove_dynexus_minter(&admin, @0xc0de);
+        assert!(!token_factory::is_dynexus_minter(@0xc0de), 3);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = token_factory::E_NOT_A_MINTER)]
+    fun test_unapproved_minter_fails() {
+        initalize_token_factory(TEST_USER);
+        let minter = create_signer_for_test(@0xc0de);
+        let fa = token_factory::mint_dynexus(&minter, 1);
+        primary_fungible_store::deposit(@0xc0de, fa);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = token_factory::E_NOT_AN_OWNER)]
+    fun test_non_admin_cannot_add_minter() {
+        initalize_token_factory(TEST_USER);
+        let user = create_signer_for_test(TEST_USER);
+        token_factory::add_dynexus_minter(&user, TEST_USER);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = token_factory::E_ALREADY_A_MINTER)]
+    fun test_add_minter_twice_fails() {
+        initalize_token_factory(TEST_USER);
+        let admin = create_signer_for_test(@dynexus_forge);
+        token_factory::add_dynexus_minter(&admin, @0xc0de);
+        token_factory::add_dynexus_minter(&admin, @0xc0de);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = token_factory::E_NOT_AN_OWNER)]
+    fun test_non_admin_cannot_set_dynexus_token() {
+        initalize_token_factory(TEST_USER);
+        let user = create_signer_for_test(TEST_USER);
+        token_factory::set_dynexus_token(&user, @0x1);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = token_factory::E_TOKEN_NOT_EXISTS)]
+    fun test_set_dynexus_token_must_be_factory_token() {
+        initalize_token_factory(TEST_USER);
+        let admin = create_signer_for_test(@dynexus_forge);
+        token_factory::set_dynexus_token(&admin, @0xdead);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = token_factory::E_SAME_VALUE)]
+    fun test_set_same_fee_fails() {
+        initalize_token_factory(TEST_USER);
+        let admin = create_signer_for_test(@dynexus_forge);
+        let (_, _, fee, _, _, _) = token_factory::get_dynexus_config();
+        token_factory::set_dynexus_plateform_fee_rate(&admin, fee);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = token_factory::E_DYNEXUS_TOKEN_NOT_SET)]
+    fun test_faucet_before_token_set_fails() {
+        genesis::setup();
+        let admin = create_signer_for_test(@dynexus_forge);
+        token_factory::initalize_token_factory_with_out_genesis(&admin);
+        let user = create_signer_for_test(TEST_USER);
+        token_factory::faucet_dynexus(&user);
+    }
+
+    #[test]
+    fun test_faucet_allowed_exactly_at_next_period() {
+        initalize_token_factory(TEST_USER);
+        let user = create_signer_for_test(TEST_USER);
+        token_factory::faucet_dynexus(&user);
+        let next = token_factory::get_next_faucet_time(TEST_USER);
+        assert!(next > 0, 1);
+        timestamp::update_global_time_for_test_secs(next);
+        token_factory::faucet_dynexus(&user);
     }
 }

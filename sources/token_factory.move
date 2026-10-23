@@ -10,7 +10,6 @@ module dynexus_forge::token_factory {
     use aptos_framework::primary_fungible_store;
     use aptos_framework::timestamp;
 
-
     //
     // Constants
     //
@@ -68,7 +67,6 @@ module dynexus_forge::token_factory {
     /// User requested for early faucet
     const E_EARLY_FAUCET: u64 = 13;
 
-
     //
     // Structs
     //
@@ -80,7 +78,6 @@ module dynexus_forge::token_factory {
         admin: address,
         plateform_fee_rate: u64,
 
-
         // Faucet
         faucet_period: u64,
         faucet_amount: u64,
@@ -88,7 +85,6 @@ module dynexus_forge::token_factory {
 
         // Statistics
         total_users: u64,
-
 
         // extending object signer
         extend_ref: ExtendRef
@@ -159,43 +155,52 @@ module dynexus_forge::token_factory {
     // Token Creation & Management
     //
 
-    public entry fun set_dynexus_token(owner: &signer, new_address: address) acquires TokenRegistry {
+    public entry fun set_dynexus_token(
+        owner: &signer, new_address: address
+    ) acquires TokenRegistry {
         let owner_addr = address_of(owner);
-        let owner_obj_addr = object::create_object_address(&owner_addr, TOKEN_FACTORY_OBJECT_SEED);
+        let owner_obj_addr =
+            object::create_object_address(&owner_addr, TOKEN_FACTORY_OBJECT_SEED);
         let registry = borrow_global_mut<TokenRegistry>(owner_obj_addr);
 
-        assert!(registry.admin == owner_addr , E_NOT_AN_OWNER);
-        assert!(registry.dynexus_token != new_address , E_INVALID_TOKEN_ADDRESS);
+        assert!(registry.admin == owner_addr, E_NOT_AN_OWNER);
+        assert!(registry.dynexus_token != new_address, E_INVALID_TOKEN_ADDRESS);
         registry.dynexus_token = new_address;
     }
 
-    public entry fun set_dynexus_plateform_fee_rate(owner: &signer, new_fee: u64) acquires TokenRegistry {
+    public entry fun set_dynexus_plateform_fee_rate(
+        owner: &signer, new_fee: u64
+    ) acquires TokenRegistry {
         let owner_addr = address_of(owner);
         let owner_obj_addr = get_token_factory_object_addr();
         let registry = borrow_global_mut<TokenRegistry>(owner_obj_addr);
 
-        assert!(registry.admin == owner_addr , E_NOT_AN_OWNER);
-        assert!(registry.plateform_fee_rate != new_fee , E_INVALID_TOKEN_ADDRESS);
+        assert!(registry.admin == owner_addr, E_NOT_AN_OWNER);
+        assert!(registry.plateform_fee_rate != new_fee, E_INVALID_TOKEN_ADDRESS);
         registry.plateform_fee_rate = new_fee;
     }
 
-    public entry fun set_dynexus_faucet_period(owner: &signer, new_period: u64) acquires TokenRegistry {
+    public entry fun set_dynexus_faucet_period(
+        owner: &signer, new_period: u64
+    ) acquires TokenRegistry {
         let owner_addr = address_of(owner);
         let owner_obj_addr = get_token_factory_object_addr();
         let registry = borrow_global_mut<TokenRegistry>(owner_obj_addr);
 
-        assert!(registry.admin == owner_addr , E_NOT_AN_OWNER);
-        assert!(registry.faucet_period != new_period , E_INVALID_TOKEN_ADDRESS);
+        assert!(registry.admin == owner_addr, E_NOT_AN_OWNER);
+        assert!(registry.faucet_period != new_period, E_INVALID_TOKEN_ADDRESS);
         registry.faucet_period = new_period;
     }
 
-    public entry fun set_dynexus_faucet_amount(owner: &signer, new_amount: u64) acquires TokenRegistry {
+    public entry fun set_dynexus_faucet_amount(
+        owner: &signer, new_amount: u64
+    ) acquires TokenRegistry {
         let owner_addr = address_of(owner);
         let owner_obj_addr = get_token_factory_object_addr();
         let registry = borrow_global_mut<TokenRegistry>(owner_obj_addr);
 
-        assert!(registry.admin == owner_addr , E_NOT_AN_OWNER);
-        assert!(registry.faucet_amount != new_amount , E_INVALID_TOKEN_ADDRESS);
+        assert!(registry.admin == owner_addr, E_NOT_AN_OWNER);
+        assert!(registry.faucet_amount != new_amount, E_INVALID_TOKEN_ADDRESS);
         registry.faucet_amount = new_amount;
     }
 
@@ -206,7 +211,7 @@ module dynexus_forge::token_factory {
         let registry = borrow_global_mut<TokenRegistry>(dynexus_obj_addr);
         let current_time = timestamp::now_seconds();
 
-        if(registry.faucet_history.contains(user_addr)){
+        if (registry.faucet_history.contains(user_addr)) {
             let history = *registry.faucet_history.borrow(user_addr);
             assert!(current_time > history, E_EARLY_FAUCET)
         };
@@ -219,11 +224,7 @@ module dynexus_forge::token_factory {
         let next_period = current_time + registry.faucet_period;
         registry.faucet_history.upsert(user_addr, next_period);
 
-        event::emit(FaucetDynexus{
-            user: user_addr,
-            amount: faucet_amount,
-            next_period
-        })
+        event::emit(FaucetDynexus { user: user_addr, amount: faucet_amount, next_period })
     }
 
     /// Creates a custom fungible token in the DYNA ecosystem.
@@ -259,20 +260,32 @@ module dynexus_forge::token_factory {
         let registry = borrow_global_mut<TokenRegistry>(registry_addr);
 
         // Apply Charges
-        if(creator_addr != @dynexus_forge){
+        if (creator_addr != @dynexus_forge) {
             let dynexus_metadata = address_to_object<Metadata>(registry.dynexus_token);
-            let balance = primary_fungible_store::balance(creator_addr, dynexus_metadata);
-            assert!(balance >= registry.plateform_fee_rate,  E_INSUFFICIENT_DYANEXUS_BALANCE);
-            primary_fungible_store::transfer(creator, dynexus_metadata, registry.admin, registry.plateform_fee_rate);
+            let balance = primary_fungible_store::balance(
+                creator_addr, dynexus_metadata
+            );
+            assert!(
+                balance >= registry.plateform_fee_rate, E_INSUFFICIENT_DYANEXUS_BALANCE
+            );
+            primary_fungible_store::transfer(
+                creator,
+                dynexus_metadata,
+                registry.admin,
+                registry.plateform_fee_rate
+            );
         };
-
 
         let token_seed = create_token_seed(&name, &symbol);
         let token_address = object::create_object_address(&creator_addr, token_seed);
 
         assert!(!exists<ManageFungibleAsset>(token_address), E_TOKEN_ALREADY_EXISTS);
         assert!(decimals <= MAX_DECIMAL, E_INVALID_TOKEN_DECIMAL);
-        assert!(icon_uri.length() <= (MAX_URI_LENGTH as u64) || project_uri.length() <= (MAX_URI_LENGTH as u64), E_INVALID_URI_LENGTH);
+        assert!(
+            icon_uri.length() <= (MAX_URI_LENGTH as u64)
+                || project_uri.length() <= (MAX_URI_LENGTH as u64),
+            E_INVALID_URI_LENGTH
+        );
 
         let constuctor_ref = object::create_named_object(creator, token_seed);
         primary_fungible_store::create_primary_store_enabled_fungible_asset(
@@ -368,7 +381,7 @@ module dynexus_forge::token_factory {
             config.plateform_fee_rate,
             config.faucet_period,
             config.faucet_amount,
-            config.total_users,
+            config.total_users
         )
     }
 
@@ -378,7 +391,9 @@ module dynexus_forge::token_factory {
     }
 
     #[view]
-    public fun get_token_fa_address(creator: address, name:String, symbol: String): address {
+    public fun get_token_fa_address(
+        creator: address, name: String, symbol: String
+    ): address {
         let seed = create_token_seed(&name, &symbol);
         object::create_object_address(&creator, seed)
     }
@@ -387,7 +402,7 @@ module dynexus_forge::token_factory {
     // Test functions
     //
     #[test_only]
-    public fun initalize_token_factory_with_out_genesis(admin: &signer){
+    public fun initalize_token_factory_with_out_genesis(admin: &signer) {
         init_module(admin)
     }
 

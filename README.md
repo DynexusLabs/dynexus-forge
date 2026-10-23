@@ -28,3 +28,4 @@ For now, deploy using the Aptos CLI:
 
 ```bash
 aptos move publish --package-dir forge
+```

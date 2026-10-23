@@ -16,23 +16,30 @@ module dynexus_forge::token_factory_test {
     const INITIAL_FAUCET_PERIOD: u64 = 600; // 1 day in seconds
     const INITIAL_PLATFORM_FEE_RATE: u64 = 5; // 0.5%
 
-    public fun create_dynexus_token(): address{
+    public fun create_dynexus_token(): address {
         let dynexus = &create_signer_for_test(@dynexus_forge);
 
         let name = string::utf8(b"DYNEXUS");
         let symbol = string::utf8(b"DYNEXUS");
-        let icon_uri = string::utf8(b"https://lavender-binding-jackal-744.mypinata.cloud/ipfs/bafybeiega65r37e6htyrgfxkqsxt36pnldpjmhmw7imyemfrub62l6sjiy");
-        let project_uri = string::utf8(b"https://lavender-binding-jackal-744.mypinata.cloud/ipfs/bafybeiega65r37e6htyrgfxkqsxt36pnldpjmhmw7imyemfrub62l6sjiy");
-        let (_, _, addr) = token_factory::create_test_token(
-            dynexus,
-            name,
-            symbol,
-            6,
-            100_000,
-            icon_uri,
-            project_uri,
-            0
-        );
+        let icon_uri =
+            string::utf8(
+                b"https://lavender-binding-jackal-744.mypinata.cloud/ipfs/bafybeiega65r37e6htyrgfxkqsxt36pnldpjmhmw7imyemfrub62l6sjiy"
+            );
+        let project_uri =
+            string::utf8(
+                b"https://lavender-binding-jackal-744.mypinata.cloud/ipfs/bafybeiega65r37e6htyrgfxkqsxt36pnldpjmhmw7imyemfrub62l6sjiy"
+            );
+        let (_, _, addr) =
+            token_factory::create_test_token(
+                dynexus,
+                name,
+                symbol,
+                6,
+                100_000,
+                icon_uri,
+                project_uri,
+                0
+            );
 
         token_factory::set_dynexus_token(dynexus, addr);
         addr
@@ -42,11 +49,21 @@ module dynexus_forge::token_factory_test {
         primary_fungible_store::balance(user, address_to_object<Metadata>(token_add))
     }
 
-    public fun transfer_token(from: &signer, to: address,  token_add: address, amount: u64) {
-        primary_fungible_store::transfer(from, address_to_object<Metadata>(token_add), to, amount)
+    public fun transfer_token(
+        from: &signer,
+        to: address,
+        token_add: address,
+        amount: u64
+    ) {
+        primary_fungible_store::transfer(
+            from,
+            address_to_object<Metadata>(token_add),
+            to,
+            amount
+        )
     }
 
-    public fun setup_token_factory(user: address){
+    public fun setup_token_factory(user: address) {
         let dynexus = &create_signer_for_test(@dynexus_forge);
         token_factory::initalize_token_factory_with_out_genesis(dynexus);
         token_factory::set_dynexus_faucet_amount(dynexus, 100);
@@ -55,13 +72,10 @@ module dynexus_forge::token_factory_test {
         token_factory::mint_token(dynexus, user, token_address, 1000)
     }
 
-
-
     public fun initalize_token_factory(user: address) {
         genesis::setup();
         setup_token_factory(user);
     }
-
 
     #[test]
     fun test_initialize_token_factory() {
@@ -85,16 +99,17 @@ module dynexus_forge::token_factory_test {
         let symbol = string::utf8(b"MT");
         let icon_uri = string::utf8(b"https://example.com/icon.png");
         let project_uri = string::utf8(b"https://example.com");
-        let (_, _, addr) = token_factory::create_test_token(
-            &admin,
-            name,
-            symbol,
-            6,
-            100_000,
-            icon_uri,
-            project_uri,
-        0
-        );
+        let (_, _, addr) =
+            token_factory::create_test_token(
+                &admin,
+                name,
+                symbol,
+                6,
+                100_000,
+                icon_uri,
+                project_uri,
+                0
+            );
 
         let balance = balance_of(address_of(&admin), addr);
         assert!(balance == 100_000, 100);
@@ -105,16 +120,17 @@ module dynexus_forge::token_factory_test {
         let admin = create_signer_for_test(@0x123);
         initalize_token_factory(address_of(&admin));
 
-        let (_, _, addr) =token_factory::create_test_token(
-            &admin,
-            string::utf8(b"Zero Supply Token"),
-            string::utf8(b"ZST"),
-            6,
-            0,
-            string::utf8(b"https://icon.com"),
-            string::utf8(b"https://project.com"),
-            0
-        );
+        let (_, _, addr) =
+            token_factory::create_test_token(
+                &admin,
+                string::utf8(b"Zero Supply Token"),
+                string::utf8(b"ZST"),
+                6,
+                0,
+                string::utf8(b"https://icon.com"),
+                string::utf8(b"https://project.com"),
+                0
+            );
 
         let balance = balance_of(address_of(&admin), addr);
         assert!(balance == 0, 104);
@@ -126,16 +142,17 @@ module dynexus_forge::token_factory_test {
         initalize_token_factory(address_of(&admin));
 
         let max_supply = 18446744073709551615u64; // u64::MAX
-        let (_, _, addr) =   token_factory::create_test_token(
-            &admin,
-            string::utf8(b"Max Supply Token"),
-            string::utf8(b"MST"),
-            6,
-            max_supply,
-            string::utf8(b"https://icon.com"),
-            string::utf8(b"https://project.com"),
-            0
-        );
+        let (_, _, addr) =
+            token_factory::create_test_token(
+                &admin,
+                string::utf8(b"Max Supply Token"),
+                string::utf8(b"MST"),
+                6,
+                max_supply,
+                string::utf8(b"https://icon.com"),
+                string::utf8(b"https://project.com"),
+                0
+            );
 
         let balance = balance_of(address_of(&admin), addr);
         assert!(balance == max_supply, 105);
@@ -169,7 +186,16 @@ module dynexus_forge::token_factory_test {
         let icon_uri = string::utf8(b"https://example.com/icon.png");
         let project_uri = string::utf8(b"https://example.com");
 
-        token_factory::create_test_token(&admin, name, symbol, 6, 100, icon_uri, project_uri, 0);
+        token_factory::create_test_token(
+            &admin,
+            name,
+            symbol,
+            6,
+            100,
+            icon_uri,
+            project_uri,
+            0
+        );
     }
 
     #[test]
@@ -265,16 +291,17 @@ module dynexus_forge::token_factory_test {
         let receiver = create_signer_for_test(@0x123);
         initalize_token_factory(address_of(&admin));
 
-        let (_, _, addr) = token_factory::create_test_token(
-            &admin,
-            string::utf8(b"Mintable"),
-            string::utf8(b"MM"),
-            6,
-            0,
-            string::utf8(b"https://icon.com"),
-            string::utf8(b"https://project.com"),
-            0
-        );
+        let (_, _, addr) =
+            token_factory::create_test_token(
+                &admin,
+                string::utf8(b"Mintable"),
+                string::utf8(b"MM"),
+                6,
+                0,
+                string::utf8(b"https://icon.com"),
+                string::utf8(b"https://project.com"),
+                0
+            );
 
         token_factory::mint_token(&admin, address_of(&receiver), addr, 555);
 
@@ -288,17 +315,17 @@ module dynexus_forge::token_factory_test {
         let receiver = create_signer_for_test(@0x123);
         initalize_token_factory(address_of(&admin));
 
-        let (_, _, addr) = token_factory::create_test_token(
-            &admin,
-            string::utf8(b"Mintable"),
-            string::utf8(b"MM"),
-            6,
-            0,
-            string::utf8(b"https://icon.com"),
-            string::utf8(b"https://project.com"),
-            0
-        );
-
+        let (_, _, addr) =
+            token_factory::create_test_token(
+                &admin,
+                string::utf8(b"Mintable"),
+                string::utf8(b"MM"),
+                6,
+                0,
+                string::utf8(b"https://icon.com"),
+                string::utf8(b"https://project.com"),
+                0
+            );
 
         token_factory::mint_token(&admin, address_of(&receiver), addr, 0);
 
@@ -311,16 +338,17 @@ module dynexus_forge::token_factory_test {
         let admin = create_signer_for_test(@0x123);
         initalize_token_factory(address_of(&admin));
 
-        let (_, _, addr) =token_factory::create_test_token(
-            &admin,
-            string::utf8(b"Self Mint"),
-            string::utf8(b"SM"),
-            6,
-            100,
-            string::utf8(b"https://icon.com"),
-            string::utf8(b"https://project.com"),
-            0
-        );
+        let (_, _, addr) =
+            token_factory::create_test_token(
+                &admin,
+                string::utf8(b"Self Mint"),
+                string::utf8(b"SM"),
+                6,
+                100,
+                string::utf8(b"https://icon.com"),
+                string::utf8(b"https://project.com"),
+                0
+            );
 
         let initial_balance = balance_of(address_of(&admin), addr);
 
@@ -338,16 +366,17 @@ module dynexus_forge::token_factory_test {
         let receiver = create_signer_for_test(@0x123);
         initalize_token_factory(address_of(&admin));
 
-        let (_, _, addr) =  token_factory::create_test_token(
-            &admin,
-            string::utf8(b"Secure Token"),
-            string::utf8(b"ST"),
-            6,
-            0,
-            string::utf8(b"https://icon.com"),
-            string::utf8(b"https://project.com"),
-            0
-        );
+        let (_, _, addr) =
+            token_factory::create_test_token(
+                &admin,
+                string::utf8(b"Secure Token"),
+                string::utf8(b"ST"),
+                6,
+                0,
+                string::utf8(b"https://icon.com"),
+                string::utf8(b"https://project.com"),
+                0
+            );
 
         token_factory::mint_token(&non_admin, address_of(&receiver), addr, 100);
     }
@@ -358,16 +387,17 @@ module dynexus_forge::token_factory_test {
         let user = create_signer_for_test(@0x124);
         initalize_token_factory(address_of(&admin));
 
-        let (_, _, addr) = token_factory::create_test_token(
-            &admin,
-            string::utf8(b"Transfer Token"),
-            string::utf8(b"TT"),
-            6,
-            1000,
-            string::utf8(b"https://icon.com"),
-            string::utf8(b"https://project.com"),
-            0
-        );
+        let (_, _, addr) =
+            token_factory::create_test_token(
+                &admin,
+                string::utf8(b"Transfer Token"),
+                string::utf8(b"TT"),
+                6,
+                1000,
+                string::utf8(b"https://icon.com"),
+                string::utf8(b"https://project.com"),
+                0
+            );
 
         transfer_token(&admin, address_of(&user), addr, 300);
         let user_balance = balance_of(address_of(&user), addr);
@@ -383,16 +413,17 @@ module dynexus_forge::token_factory_test {
         let user = create_signer_for_test(@0x123);
         initalize_token_factory(address_of(&admin));
 
-        let (_, _, addr) = token_factory::create_test_token(
-            &admin,
-            string::utf8(b"Zero Transfer"),
-            string::utf8(b"ZT"),
-            6,
-            1000,
-            string::utf8(b"https://icon.com"),
-            string::utf8(b"https://project.com"),
-            0
-        );
+        let (_, _, addr) =
+            token_factory::create_test_token(
+                &admin,
+                string::utf8(b"Zero Transfer"),
+                string::utf8(b"ZT"),
+                6,
+                1000,
+                string::utf8(b"https://icon.com"),
+                string::utf8(b"https://project.com"),
+                0
+            );
 
         let initial_admin_balance = balance_of(address_of(&admin), addr);
         let initial_user_balance = balance_of(address_of(&user), addr);
@@ -412,16 +443,17 @@ module dynexus_forge::token_factory_test {
         let user = create_signer_for_test(@0x124);
         initalize_token_factory(address_of(&admin));
 
-        let (_, _, addr) = token_factory::create_test_token(
-            &admin,
-            string::utf8(b"All Transfer"),
-            string::utf8(b"AT"),
-            6,
-            1000,
-            string::utf8(b"https://icon.com"),
-            string::utf8(b"https://project.com"),
-            0
-        );
+        let (_, _, addr) =
+            token_factory::create_test_token(
+                &admin,
+                string::utf8(b"All Transfer"),
+                string::utf8(b"AT"),
+                6,
+                1000,
+                string::utf8(b"https://icon.com"),
+                string::utf8(b"https://project.com"),
+                0
+            );
 
         transfer_token(&admin, address_of(&user), addr, 1000);
 
@@ -439,16 +471,17 @@ module dynexus_forge::token_factory_test {
         let user = create_signer_for_test(@0x123);
         initalize_token_factory(address_of(&admin));
 
-        let (_, _, addr) = token_factory::create_test_token(
-            &admin,
-            string::utf8(b"Insufficient"),
-            string::utf8(b"IN"),
-            6,
-            100,
-            string::utf8(b"https://icon.com"),
-            string::utf8(b"https://project.com"),
-            0
-        );
+        let (_, _, addr) =
+            token_factory::create_test_token(
+                &admin,
+                string::utf8(b"Insufficient"),
+                string::utf8(b"IN"),
+                6,
+                100,
+                string::utf8(b"https://icon.com"),
+                string::utf8(b"https://project.com"),
+                0
+            );
 
         // Try to transfer more than available
         transfer_token(&admin, address_of(&user), addr, 150);
@@ -459,16 +492,17 @@ module dynexus_forge::token_factory_test {
         let admin = create_signer_for_test(@0x123);
         initalize_token_factory(address_of(&admin));
 
-        let (_, _, addr) =  token_factory::create_test_token(
-            &admin,
-            string::utf8(b"Self Transfer"),
-            string::utf8(b"ST"),
-            6,
-            1000,
-            string::utf8(b"https://icon.com"),
-            string::utf8(b"https://project.com"),
-            0
-        );
+        let (_, _, addr) =
+            token_factory::create_test_token(
+                &admin,
+                string::utf8(b"Self Transfer"),
+                string::utf8(b"ST"),
+                6,
+                1000,
+                string::utf8(b"https://icon.com"),
+                string::utf8(b"https://project.com"),
+                0
+            );
 
         let initial_balance = balance_of(address_of(&admin), addr);
 
@@ -524,7 +558,6 @@ module dynexus_forge::token_factory_test {
         );
     }
 
-
     #[test]
     #[expected_failure]
     fun test_get_balance_invalid_token_should_fail() {
@@ -556,16 +589,17 @@ module dynexus_forge::token_factory_test {
         initalize_token_factory(address_of(&admin));
 
         // Create token with initial supply
-        let (_, _, addr) =  token_factory::create_test_token(
-            &admin,
-            string::utf8(b"Complex Token"),
-            string::utf8(b"CT"),
-            6,
-            10000,
-            string::utf8(b"https://icon.com"),
-            string::utf8(b"https://project.com"),
-            0
-        );
+        let (_, _, addr) =
+            token_factory::create_test_token(
+                &admin,
+                string::utf8(b"Complex Token"),
+                string::utf8(b"CT"),
+                6,
+                10000,
+                string::utf8(b"https://icon.com"),
+                string::utf8(b"https://project.com"),
+                0
+            );
 
         // Transfer some to user1
         transfer_token(&admin, address_of(&user1), addr, 3000);
@@ -628,8 +662,14 @@ module dynexus_forge::token_factory_test {
         let admin = create_signer_for_test(@0x123);
         initalize_token_factory(address_of(&admin));
 
-        let long_name = string::utf8(b"This is a very long token name that might test the limits of string handling in the smart contract implementation");
-        let long_uri = string::utf8(b"https://this-is-a-very-long-uri-that-might-test-url-handling.example.com/path/to/resource/with/many/segments/and/parameters?param1=value1&param2=value2");
+        let long_name =
+            string::utf8(
+                b"This is a very long token name that might test the limits of string handling in the smart contract implementation"
+            );
+        let long_uri =
+            string::utf8(
+                b"https://this-is-a-very-long-uri-that-might-test-url-handling.example.com/path/to/resource/with/many/segments/and/parameters?param1=value1&param2=value2"
+            );
 
         token_factory::create_test_token(
             &admin,
@@ -650,14 +690,8 @@ module dynexus_forge::token_factory_test {
 
         let admin = create_signer_for_test(@dynexus_forge);
         // Verify initial values
-        let (
-            _,
-            admin_addr,
-            plateform_fee_rate,
-            faucet_period,
-            _,
-            _,
-        ) = token_factory::get_dynexus_config();
+        let (_, admin_addr, plateform_fee_rate, faucet_period, _, _) =
+            token_factory::get_dynexus_config();
 
         assert!(admin_addr == @dynexus_forge, 0);
         assert!(faucet_period == INITIAL_FAUCET_PERIOD, 2);
@@ -666,40 +700,19 @@ module dynexus_forge::token_factory_test {
         // Test setting new platform fee rate (admin only)
         let new_fee = 100; // 1%
         token_factory::set_dynexus_plateform_fee_rate(&admin, new_fee);
-        let (
-            _,
-            _,
-            plateform_fee_rate,
-            _,
-            _,
-            _,
-        ) = token_factory::get_dynexus_config();
+        let (_, _, plateform_fee_rate, _, _, _) = token_factory::get_dynexus_config();
         assert!(plateform_fee_rate == new_fee, 4);
 
         // Test setting new faucet period (admin only)
         let new_period = 43200; // 12 hours
         token_factory::set_dynexus_faucet_period(&admin, new_period);
-        let (
-            _,
-            _,
-            _,
-            faucet_period,
-            _,
-            _,
-        ) = token_factory::get_dynexus_config();
+        let (_, _, _, faucet_period, _, _) = token_factory::get_dynexus_config();
         assert!(faucet_period == new_period, 5);
 
         // Test setting new faucet amount (admin only)
         let new_amount = 2000;
         token_factory::set_dynexus_faucet_amount(&admin, new_amount);
-        let (
-            _,
-            _,
-            _,
-            _,
-            faucet_amount,
-            _,
-        ) = token_factory::get_dynexus_config();
+        let (_, _, _, _, faucet_amount, _) = token_factory::get_dynexus_config();
         assert!(faucet_amount == new_amount, 6);
     }
 
@@ -711,25 +724,21 @@ module dynexus_forge::token_factory_test {
         let user = create_signer_for_test(TEST_USER);
         // Initialize with known values
         token_factory::set_dynexus_faucet_amount(&admin, INITIAL_FAUCET_AMOUNT);
-        let new_period = INITIAL_FAUCET_PERIOD+ 10;
+        let new_period = INITIAL_FAUCET_PERIOD + 10;
         token_factory::set_dynexus_faucet_period(&admin, new_period);
 
-        let (
-            token_address,
-            _,
-            _,
-            _,
-            _,
-            _,
-        ) = token_factory::get_dynexus_config();
+        let (token_address, _, _, _, _, _) = token_factory::get_dynexus_config();
 
         // First faucet claim should succeed
         let initial_balance = balance_of(TEST_USER, token_address);
         token_factory::faucet_dynexus(&user);
         let new_balance = balance_of(TEST_USER, token_address);
-        assert!(new_balance == initial_balance + INITIAL_FAUCET_AMOUNT, 11);
+        assert!(
+            new_balance == initial_balance + INITIAL_FAUCET_AMOUNT,
+            11
+        );
 
-        timestamp::fast_forward_seconds(new_period+1);
+        timestamp::fast_forward_seconds(new_period + 1);
         token_factory::faucet_dynexus(&user);
     }
 
@@ -744,23 +753,19 @@ module dynexus_forge::token_factory_test {
         token_factory::set_dynexus_faucet_amount(&admin, INITIAL_FAUCET_AMOUNT);
         token_factory::set_dynexus_faucet_period(&admin, INITIAL_FAUCET_PERIOD);
 
-        let (
-            token_address,
-            _,
-            _,
-            _,
-            _,
-            _,
-        ) = token_factory::get_dynexus_config();
+        let (token_address, _, _, _, _, _) = token_factory::get_dynexus_config();
 
         // First faucet claim should succeed
         let initial_balance = balance_of(TEST_USER, token_address);
         token_factory::faucet_dynexus(&user);
         let new_balance = balance_of(TEST_USER, token_address);
-        assert!(new_balance == initial_balance + INITIAL_FAUCET_AMOUNT, 11);
+        assert!(
+            new_balance == initial_balance + INITIAL_FAUCET_AMOUNT,
+            11
+        );
         token_factory::faucet_dynexus(&user);
 
-        timestamp::fast_forward_seconds(INITIAL_FAUCET_PERIOD+1);
+        timestamp::fast_forward_seconds(INITIAL_FAUCET_PERIOD + 1);
         token_factory::faucet_dynexus(&user);
     }
 

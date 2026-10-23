@@ -29,6 +29,7 @@ aptos move run \
 ```
 
 Parameters:
+
 - Token name: `DYNEXUS`
 - Token symbol: `DYNEXUS`
 - Decimals: `8`

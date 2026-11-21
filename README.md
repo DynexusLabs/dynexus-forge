@@ -1,5 +1,7 @@
 # Dynexus Forge
 
+[![CI](https://github.com/DynexusLabs/dynexus-forge/actions/workflows/ci.yml/badge.svg)](https://github.com/DynexusLabs/dynexus-forge/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) [![Network: Aptos testnet](https://img.shields.io/badge/network-Aptos%20testnet-00d9ff.svg)](https://aptos.dev)
+
 **Dynexus Forge** is the token creation module within the Dynexus ecosystem. It allows users to launch their own fungible tokens on the Aptos blockchain using the DYNA platform.
 
 ---
